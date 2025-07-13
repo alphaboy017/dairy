@@ -332,6 +332,7 @@ def create_forecasting_section(df):
         # Prepare a dataframe to hold both historical and future values for recursive feature calculation
         df_forecast = df_processed.copy().reset_index(drop=True)
         forecast_values = []
+        last_known_row = df_processed.iloc[-1]
         
         for i in range(30):
             forecast_date = future_dates[i]
@@ -360,10 +361,10 @@ def create_forecasting_section(df):
                 else:
                     new_row[f'{target_col}_rolling_mean_{window}'] = df[target_col].mean()
                     new_row[f'{target_col}_rolling_std_{window}'] = df[target_col].std()
-            # Add all other features as 0 if missing (to match training columns)
+            # For all other features, use last known value instead of zero
             for col in X.columns:
                 if col not in new_row and col != 'Date':
-                    new_row[col] = 0
+                    new_row[col] = last_known_row[col] if col in last_known_row else 0
             # Order columns to match training
             X_new = pd.DataFrame([new_row])[X.columns]
             # Scale features
@@ -372,6 +373,8 @@ def create_forecasting_section(df):
                 y_pred = best_model.predict(X_new_scaled)[0]
             else:
                 y_pred = best_model.predict(X_new)[0]
+            # Clip negative predictions to zero
+            y_pred = max(y_pred, 0)
             forecast_values.append(y_pred)
             # Add prediction to df_forecast for next iteration's lag/rolling calculation
             new_row[target_col] = y_pred
@@ -385,42 +388,81 @@ def create_forecasting_section(df):
             last_pred = best_model.predict(last_X)
         st.write('Prediction for last training row:', last_pred)
         
-        # Create forecast plot
+        # --- Feature/Target Visualization: Last 30 days vs Forecast ---
+        st.markdown('### 🕵️‍♂️ Feature & Target Comparison: Last 30 Days vs Forecast')
+        # Prepare comparison data
+        last_30_hist = df_processed.tail(30).copy()
+        forecast_df = pd.DataFrame({'Date': future_dates, 'Forecast': forecast_values})
+        # For lag/rolling features, show their values for last 30 days and forecast period
+        feature_cols_to_plot = [col for col in X.columns if any(s in col for s in ['lag', 'rolling'])]
+        for col in feature_cols_to_plot[:5]:  # Limit to first 5 for brevity
+            st.line_chart({
+                'Last 30 Days': last_30_hist[col].values if col in last_30_hist else [],
+                'Forecast Period': df_forecast[col].tail(30).values if col in df_forecast else []
+            }, height=150, width=0)
+        # Target comparison
+        st.line_chart({
+            'Last 30 Days': last_30_hist[target_col].values,
+            'Forecast Period': forecast_df['Forecast'].values
+        }, height=200, width=0)
+
+        # --- Naive Baseline Forecast ---
+        naive_forecast = [df_processed[target_col].iloc[-1]] * 30
+        forecast_df['Naive'] = naive_forecast
+
+        # --- Prophet Forecast ---
+        prophet_forecast = None
+        if st.checkbox('Show Prophet Forecast (experimental)', value=True):
+            prophet_df = df[["Date", target_col]].rename(columns={"Date": "ds", target_col: "y"})
+            m = Prophet()
+            m.fit(prophet_df)
+            future = m.make_future_dataframe(periods=30)
+            forecast_prophet = m.predict(future)
+            # Only take the forecast period
+            prophet_forecast = forecast_prophet.tail(30)["yhat"].values
+            forecast_df['Prophet'] = prophet_forecast
+
+        # --- Plot all forecasts ---
         fig = go.Figure()
-        
-        # Historical data
+        # Historical
         fig.add_trace(go.Scatter(
             x=df['Date'],
             y=df[target_col],
             name='Historical',
             line=dict(color='blue')
         ))
-        
-        # Forecast
+        # ML Forecast
         fig.add_trace(go.Scatter(
             x=future_dates,
             y=forecast_values,
-            name='Forecast',
+            name='ML Forecast',
             line=dict(color='red')
         ))
-        
+        # Naive Forecast
+        fig.add_trace(go.Scatter(
+            x=future_dates,
+            y=naive_forecast,
+            name='Naive Forecast',
+            line=dict(color='green', dash='dash')
+        ))
+        # Prophet Forecast
+        if prophet_forecast is not None:
+            fig.add_trace(go.Scatter(
+                x=future_dates,
+                y=prophet_forecast,
+                name='Prophet Forecast',
+                line=dict(color='orange', dash='dot')
+            ))
         fig.update_layout(
             title=f'{selected_target} Forecast (Next 30 Days)',
             xaxis_title='Date',
             yaxis_title=selected_target,
             height=500
         )
-        
         st.plotly_chart(fig, use_container_width=True)
-        
         # Display forecast table
-        forecast_df = pd.DataFrame({
-            'Date': future_dates,
-            'Forecast': forecast_values
-        })
         forecast_df['Forecast'] = forecast_df['Forecast'].round(2)
-        
-        st.markdown("### 📋 Forecast Details")
+        st.markdown('### 📋 Forecast Details')
         st.dataframe(forecast_df, use_container_width=True)
 
 def create_capacity_optimization(df):
