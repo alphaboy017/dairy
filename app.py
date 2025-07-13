@@ -388,27 +388,9 @@ def create_forecasting_section(df):
             last_pred = best_model.predict(last_X)
         st.write('Prediction for last training row:', last_pred)
         
-        # --- Feature/Target Visualization: Last 30 days vs Forecast ---
-        st.markdown('### 🕵️‍♂️ Feature & Target Comparison: Last 30 Days vs Forecast')
-        # Prepare comparison data
-        last_30_hist = df_processed.tail(30).copy()
-        forecast_df = pd.DataFrame({'Date': future_dates, 'Forecast': forecast_values})
-        # For lag/rolling features, show their values for last 30 days and forecast period
-        feature_cols_to_plot = [col for col in X.columns if any(s in col for s in ['lag', 'rolling'])]
-        for col in feature_cols_to_plot[:5]:  # Limit to first 5 for brevity
-            st.line_chart({
-                'Last 30 Days': last_30_hist[col].values if col in last_30_hist else [],
-                'Forecast Period': df_forecast[col].tail(30).values if col in df_forecast else []
-            }, height=150, width=0)
-        # Target comparison
-        st.line_chart({
-            'Last 30 Days': last_30_hist[target_col].values,
-            'Forecast Period': forecast_df['Forecast'].values
-        }, height=200, width=0)
-
         # --- Naive Baseline Forecast ---
         naive_forecast = [df_processed[target_col].iloc[-1]] * 30
-        forecast_df['Naive'] = naive_forecast
+        forecast_df = pd.DataFrame({'Date': future_dates, 'Forecast': forecast_values})
 
         # --- Prophet Forecast ---
         prophet_forecast = None
