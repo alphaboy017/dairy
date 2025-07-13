@@ -252,12 +252,8 @@ def train_models(X, y):
     results = {}
     
     for name, model in models.items():
-        if name == 'Linear Regression':
-            model.fit(X_train_scaled, y_train)
-            y_pred = model.predict(X_test_scaled)
-        else:
-            model.fit(X_train, y_train)
-            y_pred = model.predict(X_test)
+        model.fit(X_train_scaled, y_train)
+        y_pred = model.predict(X_test_scaled)
         
         # Calculate metrics
         mae = mean_absolute_error(y_test, y_pred)
@@ -267,7 +263,7 @@ def train_models(X, y):
         
         results[name] = {
             'model': model,
-            'scaler': scaler if name == 'Linear Regression' else None,
+            'scaler': scaler,
             'mae': mae,
             'mse': mse,
             'rmse': rmse,
