@@ -424,10 +424,14 @@ def create_forecasting_section(df):
 
         # --- Plot all forecasts ---
         fig = go.Figure()
-        # Historical
+        # Show only previous 1 year of historical data
+        one_year_ago = df['Date'].max() - pd.Timedelta(days=365)
+        mask_last_year = df['Date'] >= one_year_ago
+        df_last_year = df[mask_last_year]
+        # Historical (last 1 year)
         fig.add_trace(go.Scatter(
-            x=df['Date'],
-            y=df[target_col],
+            x=df_last_year['Date'],
+            y=df_last_year[target_col],
             name='Historical',
             line=dict(color='blue')
         ))
