@@ -366,6 +366,12 @@ def create_forecasting_section(df):
                     new_row[col] = 0
             # Order columns to match training
             X_new = pd.DataFrame([new_row])[X.columns]
+            # Debug: Show features for first forecasted day
+            if i == 0:
+                st.write('First forecast input features:', X_new)
+            # Debug: Check for NaNs
+            if X_new.isnull().any().any():
+                st.write('NaNs in forecast features:', X_new)
             # Scale features
             if best_scaler:
                 X_new_scaled = best_scaler.transform(X_new)
@@ -376,6 +382,14 @@ def create_forecasting_section(df):
             # Add prediction to df_forecast for next iteration's lag/rolling calculation
             new_row[target_col] = y_pred
             df_forecast = pd.concat([df_forecast, pd.DataFrame([new_row])], ignore_index=True)
+        # Debug: Check model output on last training row
+        last_X = X.tail(1)
+        if best_scaler:
+            last_X_scaled = best_scaler.transform(last_X)
+            last_pred = best_model.predict(last_X_scaled)
+        else:
+            last_pred = best_model.predict(last_X)
+        st.write('Prediction for last training row:', last_pred)
         
         # Create forecast plot
         fig = go.Figure()
