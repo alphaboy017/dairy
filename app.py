@@ -329,50 +329,53 @@ def create_forecasting_section(df):
         last_date = df['Date'].max()
         future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=30, freq='D')
         
-        # Prepare future features
-        future_df = pd.DataFrame({'Date': future_dates})
-        future_df['DayOfWeek'] = future_df['Date'].dt.dayofweek
-        future_df['Month'] = future_df['Date'].dt.month
-        future_df['Quarter'] = future_df['Date'].dt.quarter
-        future_df['Year'] = future_df['Date'].dt.year
+        # Prepare a dataframe to hold both historical and future values for recursive feature calculation
+        df_forecast = df_processed.copy().reset_index(drop=True)
+        forecast_values = []
         
-        # Add seasonal features
-        future_df['sin_day'] = np.sin(2 * np.pi * future_df['DayOfWeek'] / 7)
-        future_df['cos_day'] = np.cos(2 * np.pi * future_df['DayOfWeek'] / 7)
-        future_df['sin_month'] = np.sin(2 * np.pi * future_df['Month'] / 12)
-        future_df['cos_month'] = np.cos(2 * np.pi * future_df['Month'] / 12)
-        
-        # Use last known values for lag features (simplified approach)
-        last_values = df[target_col].tail(30).values
-        for i in range(len(future_df)):
-            if i < len(last_values):
-                future_df.loc[i, f'{target_col}_lag_1'] = last_values[-(i+1)]
-                if i < len(last_values) - 7:
-                    future_df.loc[i, f'{target_col}_lag_7'] = last_values[-(i+8)]
-                if i < len(last_values) - 14:
-                    future_df.loc[i, f'{target_col}_lag_14'] = last_values[-(i+15)]
-                if i < len(last_values) - 30:
-                    future_df.loc[i, f'{target_col}_lag_30'] = last_values[-(i+31)]
-        
-        # Fill remaining NaN values with mean
-        future_df = future_df.fillna(df[target_col].mean())
-        
-        # Prepare future features
-        future_features = [col for col in future_df.columns if col != 'Date']
-        X_future = future_df[future_features]
-
-        # Ensure X_future matches training features
-        for col in X.columns:
-            if col not in X_future.columns:
-                X_future[col] = 0  # or use a suitable default value
-        X_future = X_future[X.columns]  # Reorder columns to match training
-
-        # Make predictions
-        if best_scaler:
-            X_future_scaled = best_scaler.transform(X_future)
-            future_predictions = best_model.predict(X_future_scaled)
-        else:
-            future_predictions = best_model.predict(X_future)
+        for i in range(30):
+            forecast_date = future_dates[i]
+            # Create a new row for the next day
+            new_row = {}
+            new_row['Date'] = forecast_date
+            new_row['DayOfWeek'] = forecast_date.dayofweek
+            new_row['Month'] = forecast_date.month
+            new_row['Quarter'] = forecast_date.quarter
+            new_row['Year'] = forecast_date.year
+            new_row['sin_day'] = np.sin(2 * np.pi * new_row['DayOfWeek'] / 7)
+            new_row['cos_day'] = np.cos(2 * np.pi * new_row['DayOfWeek'] / 7)
+            new_row['sin_month'] = np.sin(2 * np.pi * new_row['Month'] / 12)
+            new_row['cos_month'] = np.cos(2 * np.pi * new_row['Month'] / 12)
+            # Lag features
+            for lag in [1, 7, 14, 30]:
+                if len(df_forecast) >= lag:
+                    new_row[f'{target_col}_lag_{lag}'] = df_forecast[target_col].iloc[-lag]
+                else:
+                    new_row[f'{target_col}_lag_{lag}'] = df[target_col].mean()
+            # Rolling features
+            for window in [7, 14, 30]:
+                if len(df_forecast) >= window:
+                    new_row[f'{target_col}_rolling_mean_{window}'] = df_forecast[target_col].iloc[-window:].mean()
+                    new_row[f'{target_col}_rolling_std_{window}'] = df_forecast[target_col].iloc[-window:].std()
+                else:
+                    new_row[f'{target_col}_rolling_mean_{window}'] = df[target_col].mean()
+                    new_row[f'{target_col}_rolling_std_{window}'] = df[target_col].std()
+            # Add all other features as 0 if missing (to match training columns)
+            for col in X.columns:
+                if col not in new_row and col != 'Date':
+                    new_row[col] = 0
+            # Order columns to match training
+            X_new = pd.DataFrame([new_row])[X.columns]
+            # Scale features
+            if best_scaler:
+                X_new_scaled = best_scaler.transform(X_new)
+                y_pred = best_model.predict(X_new_scaled)[0]
+            else:
+                y_pred = best_model.predict(X_new)[0]
+            forecast_values.append(y_pred)
+            # Add prediction to df_forecast for next iteration's lag/rolling calculation
+            new_row[target_col] = y_pred
+            df_forecast = pd.concat([df_forecast, pd.DataFrame([new_row])], ignore_index=True)
         
         # Create forecast plot
         fig = go.Figure()
@@ -388,7 +391,7 @@ def create_forecasting_section(df):
         # Forecast
         fig.add_trace(go.Scatter(
             x=future_dates,
-            y=future_predictions,
+            y=forecast_values,
             name='Forecast',
             line=dict(color='red')
         ))
@@ -405,7 +408,7 @@ def create_forecasting_section(df):
         # Display forecast table
         forecast_df = pd.DataFrame({
             'Date': future_dates,
-            'Forecast': future_predictions
+            'Forecast': forecast_values
         })
         forecast_df['Forecast'] = forecast_df['Forecast'].round(2)
         
