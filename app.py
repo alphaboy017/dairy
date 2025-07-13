@@ -237,8 +237,7 @@ def train_models(X, y):
         'Random Forest': RandomForestRegressor(n_estimators=100, random_state=42),
         'Gradient Boosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
         'XGBoost': xgb.XGBRegressor(n_estimators=100, random_state=42),
-        'LightGBM': lgb.LGBMRegressor(n_estimators=100, random_state=42),
-        'Linear Regression': LinearRegression()
+        'LightGBM': lgb.LGBMRegressor(n_estimators=100, random_state=42)
     }
     
     # Split data
@@ -311,7 +310,6 @@ def create_forecasting_section(df):
                 'RMSE': result['rmse'],
                 'R²': result['r2']
             })
-        
         performance_df = pd.DataFrame(performance_data)
         st.dataframe(performance_df, use_container_width=True)
         
@@ -319,8 +317,10 @@ def create_forecasting_section(df):
         best_model_name = min(results.keys(), key=lambda x: results[x]['rmse'])
         best_model = results[best_model_name]['model']
         best_scaler = results[best_model_name]['scaler']
-        
         st.success(f"🎯 Best Model: {best_model_name} (RMSE: {results[best_model_name]['rmse']:.2f})")
+        # Debug: Show y_test and y_pred for best model
+        st.write(f'y_test for {best_model_name}:', results[best_model_name]["y_test"].shape, results[best_model_name]["y_test"][:10])
+        st.write(f'y_pred for {best_model_name}:', results[best_model_name]["y_pred"].shape, results[best_model_name]["y_pred"][:10])
         
         # Create forecast
         st.markdown("### 🔮 Future Forecast")
