@@ -366,12 +366,6 @@ def create_forecasting_section(df):
                     new_row[col] = 0
             # Order columns to match training
             X_new = pd.DataFrame([new_row])[X.columns]
-            # Debug: Show features for first forecasted day
-            if i == 0:
-                st.write('First forecast input features:', X_new)
-            # Debug: Check for NaNs
-            if X_new.isnull().any().any():
-                st.write('NaNs in forecast features:', X_new)
             # Scale features
             if best_scaler:
                 X_new_scaled = best_scaler.transform(X_new)
@@ -501,6 +495,9 @@ def main():
     if df is None:
         st.error("Failed to load data. Please check the CSV file.")
         return
+    
+    # Remove debug outputs
+    # (No st.write for head, tail, unique values, or summary statistics)
     
     # Sidebar
     st.sidebar.title("🥛 Dairy Forecasting")
