@@ -313,7 +313,7 @@ def create_forecasting_section(df):
         performance_df = pd.DataFrame(performance_data)
         st.dataframe(performance_df, use_container_width=True)
         
-        # Find best model
+        
         best_model_name = min(results.keys(), key=lambda x: results[x]['rmse'])
         best_model = results[best_model_name]['model']
         best_scaler = results[best_model_name]['scaler']
